@@ -1,0 +1,356 @@
+<!-- Layout: centered single-column console — a drop zone above a running list of upload "jobs", each tracked through its own lifecycle -->
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Thumbnail Pipeline</title>
+<style>
+  :root {
+    --bg: #f5f3ef;
+    --surface: #ffffff;
+    --border: #e2ded5;
+    --ink: #1c1a17;
+    --ink-soft: #6b6557;
+    --accent: #c9622f;
+    --accent-soft: #f2ddd0;
+    --ok: #3f7d58;
+    --ok-soft: #dcefe2;
+    --queued: #8a7f5f;
+    --queued-soft: #efe9d6;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17140f;
+      --surface: #221e17;
+      --border: #3a342a;
+      --ink: #f1ece2;
+      --ink-soft: #a89f8c;
+      --accent: #e0834d;
+      --accent-soft: #3a2a1e;
+      --ok: #6fbf8e;
+      --ok-soft: #1f3327;
+      --queued: #cbbd8f;
+      --queued-soft: #342f1f;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #17140f;
+    --surface: #221e17;
+    --border: #3a342a;
+    --ink: #f1ece2;
+    --ink-soft: #a89f8c;
+    --accent: #e0834d;
+    --accent-soft: #3a2a1e;
+    --ok: #6fbf8e;
+    --ok-soft: #1f3327;
+    --queued: #cbbd8f;
+    --queued-soft: #342f1f;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.5 "Inter", system-ui, sans-serif;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 2.5rem;
+  }
+  h1, h2, .display { font-family: "Space Grotesk", "Inter", system-ui, sans-serif; }
+
+  main {
+    max-width: 640px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  header { display: flex; flex-direction: column; gap: 0.35rem; }
+  h1 { font-size: 1.6rem; font-weight: 700; margin: 0; text-wrap: balance; }
+  .subtitle { color: var(--ink-soft); font-size: 0.92rem; margin: 0; }
+
+  .config {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.7rem 0.9rem;
+    font-size: 0.82rem;
+    color: var(--ink-soft);
+  }
+  .config input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    color: var(--ink);
+    font: inherit;
+    outline: none;
+  }
+  .config label { white-space: nowrap; color: var(--ink-soft); font-weight: 600; }
+
+  .dropzone {
+    border: 2px dashed var(--border);
+    border-radius: 16px;
+    background: var(--surface);
+    padding: 2.2rem 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .dropzone:hover, .dropzone.drag { border-color: var(--accent); background: var(--accent-soft); }
+  .dropzone input { display: none; }
+  .dropzone .icon { font-size: 1.8rem; margin-bottom: 0.4rem; }
+  .dropzone .label { font-weight: 600; }
+  .dropzone .hint { color: var(--ink-soft); font-size: 0.85rem; margin-top: 0.3rem; }
+
+  .jobs { display: flex; flex-direction: column; gap: 0.6rem; }
+  .empty {
+    color: var(--ink-soft);
+    font-size: 0.88rem;
+    text-align: center;
+    padding: 1.5rem 0;
+  }
+
+  .job {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 0.75rem 0.9rem;
+    min-width: 0;
+  }
+  .job .thumb {
+    width: 44px;
+    height: 44px;
+    border-radius: 8px;
+    background: var(--queued-soft);
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    overflow: hidden;
+  }
+  .job .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .job .meta { min-width: 0; flex: 1; }
+  .job .name {
+    font-weight: 600;
+    font-size: 0.88rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .job .sub { color: var(--ink-soft); font-size: 0.78rem; margin-top: 0.1rem; }
+
+  .badge {
+    flex: none;
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    padding: 0.3rem 0.6rem;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .badge.uploading { background: var(--accent-soft); color: var(--accent); }
+  .badge.queued { background: var(--queued-soft); color: var(--queued); }
+  .badge.done { background: var(--ok-soft); color: var(--ok); }
+  .badge.error { background: var(--accent-soft); color: var(--accent); }
+
+  .spin {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .spin { animation: none; }
+  }
+
+  footer {
+    color: var(--ink-soft);
+    font-size: 0.78rem;
+    text-align: center;
+    padding-top: 0.5rem;
+  }
+</style>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap">
+
+<main>
+  <header>
+    <h1>Thumbnail Pipeline</h1>
+    <p class="subtitle">Upload photos, watch them move from upload to processed thumbnail in real time.</p>
+  </header>
+
+  <div class="config">
+    <label for="lambdaUrl">Lambda URL</label>
+    <input id="lambdaUrl" type="text" placeholder="https://xxxx.lambda-url.ap-south-1.on.aws/" />
+  </div>
+
+  <div class="dropzone" id="dropzone">
+    <div class="icon">📤</div>
+    <div class="label">Click to choose photos, or drag them here</div>
+    <div class="hint">Each file should be under ~4&nbsp;MB</div>
+    <input type="file" id="fileInput" accept="image/*" multiple />
+  </div>
+
+  <div class="jobs" id="jobs">
+    <div class="empty" id="emptyState">No uploads yet — add a photo above to start.</div>
+  </div>
+
+  <footer>Status is read from DynamoDB via your Lambda function every couple of seconds.</footer>
+</main>
+
+<script>
+(function () {
+  var dropzone = document.getElementById('dropzone');
+  var fileInput = document.getElementById('fileInput');
+  var jobsEl = document.getElementById('jobs');
+  var emptyState = document.getElementById('emptyState');
+  var lambdaUrlInput = document.getElementById('lambdaUrl');
+
+  try {
+    var saved = localStorage.getItem('thumbnail-pipeline-url');
+    if (saved) lambdaUrlInput.value = saved;
+  } catch (e) {}
+
+  lambdaUrlInput.addEventListener('change', function () {
+    try { localStorage.setItem('thumbnail-pipeline-url', lambdaUrlInput.value.trim()); } catch (e) {}
+  });
+
+  dropzone.addEventListener('click', function () { fileInput.click(); });
+  dropzone.addEventListener('dragover', function (e) { e.preventDefault(); dropzone.classList.add('drag'); });
+  dropzone.addEventListener('dragleave', function () { dropzone.classList.remove('drag'); });
+  dropzone.addEventListener('drop', function (e) {
+    e.preventDefault();
+    dropzone.classList.remove('drag');
+    handleFiles(e.dataTransfer.files);
+  });
+  fileInput.addEventListener('change', function () {
+    handleFiles(fileInput.files);
+    fileInput.value = '';
+  });
+
+  function handleFiles(fileList) {
+    var url = lambdaUrlInput.value.trim();
+    if (!url) {
+      alert('Paste your Lambda Function URL above first.');
+      return;
+    }
+    Array.prototype.forEach.call(fileList, function (file) {
+      startJob(file, url);
+    });
+  }
+
+  function uniqueName(name) {
+    var dot = name.lastIndexOf('.');
+    var stamp = Date.now().toString(36);
+    if (dot === -1) return name + '-' + stamp;
+    return name.slice(0, dot) + '-' + stamp + name.slice(dot);
+  }
+
+  function startJob(file, lambdaUrl) {
+    emptyState.hidden = true;
+    var filename = uniqueName(file.name);
+
+    var row = document.createElement('div');
+    row.className = 'job';
+    row.innerHTML =
+      '<div class="thumb" data-thumb>🖼️</div>' +
+      '<div class="meta">' +
+        '<div class="name">' + escapeHtml(file.name) + '</div>' +
+        '<div class="sub" data-sub>Preparing…</div>' +
+      '</div>' +
+      '<div class="badge uploading" data-badge><span class="spin"></span>Uploading</div>';
+    jobsEl.prepend(row);
+
+    var thumbEl = row.querySelector('[data-thumb]');
+    var subEl = row.querySelector('[data-sub]');
+    var badgeEl = row.querySelector('[data-badge]');
+
+    var reader = new FileReader();
+    reader.onload = function () {
+      var base64 = reader.result.split(',')[1];
+      subEl.textContent = (file.size / 1024).toFixed(0) + ' KB — sending to Lambda…';
+
+      fetch(lambdaUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: filename, file_base64: base64 })
+      })
+        .then(function (res) {
+          if (!res.ok) throw new Error('Upload failed (' + res.status + ')');
+          return res.json();
+        })
+        .then(function () {
+          setBadge(badgeEl, 'queued', 'Queued');
+          subEl.textContent = 'Waiting for the worker to generate a thumbnail…';
+          pollStatus(filename, lambdaUrl, subEl, badgeEl, thumbEl);
+        })
+        .catch(function (err) {
+          setBadge(badgeEl, 'error', 'Failed');
+          subEl.textContent = err.message;
+        });
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function pollStatus(filename, lambdaUrl, subEl, badgeEl, thumbEl) {
+    var attempts = 0;
+    var maxAttempts = 40;
+
+    var tick = function () {
+      attempts++;
+      fetch(lambdaUrl + '?filename=' + encodeURIComponent(filename))
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (data.status === 'done') {
+            setBadge(badgeEl, 'done', 'Done');
+            subEl.textContent = 'Thumbnail ready: ' + (data.thumbnail_key || '');
+            thumbEl.textContent = '✅';
+            return;
+          }
+          if (attempts >= maxAttempts) {
+            subEl.textContent = 'Still processing after a while — check the worker is running.';
+            return;
+          }
+          setTimeout(tick, 2000);
+        })
+        .catch(function () {
+          if (attempts >= maxAttempts) {
+            subEl.textContent = 'Lost touch with the status endpoint.';
+            return;
+          }
+          setTimeout(tick, 2000);
+        });
+    };
+    setTimeout(tick, 1500);
+  }
+
+  function setBadge(el, cls, label) {
+    el.className = 'badge ' + cls;
+    el.innerHTML = cls === 'queued' ? '<span class="spin"></span>' + label : label;
+  }
+
+  function escapeHtml(s) {
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+})();
+</script>
