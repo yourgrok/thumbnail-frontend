@@ -2,9 +2,9 @@
 
 UCS531 Cloud Computing project. The [live demo](https://yourgrok.github.io/thumbnail-frontend/) uploads an image, queues a resize job and displays the resulting status.
 
-- [Project proposal](docs/proposal.md)
-- [System architecture](docs/architecture.md)
-- [Cloud deployment and live demonstration](docs/deployment-demo.md)
+- [Project proposal](docs/project-proposal.pdf)
+- [System architecture](docs/system-architecture.pdf)
+- [Cloud deployment and live demonstration](docs/cloud-deployment-demo.pdf)
 - [Project report with screenshots](docs/project-report.pdf)
 
 ## Source code
